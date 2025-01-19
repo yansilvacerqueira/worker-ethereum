@@ -13,25 +13,28 @@ import (
 	"github.com/yansilvacerqueira/worker-ethereum/internal/mongodb"
 )
 
+var (
+	MongoURI      = "mongodb://localhost:27017"
+	MongoUser     = "root"
+	MongoPassword = "example"
+	DatabaseName  = "ethereum_monitor"
+)
+
 func main() {
 	ctx := context.Background()
 
-	// Initialize MongoDB client
-	mongoClient, err := mongodb.NewClient(ctx)
+	mongoClient, err := mongodb.NewClient(ctx, DatabaseName, MongoUser, MongoPassword, DatabaseName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer mongoClient.Close(ctx)
 
-	// Initialize handler
 	handler := api.NewHandler(mongoClient)
 
-	// Setup routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/transactions", handler.GetTransactions)
 	mux.HandleFunc("/api/alerts", handler.GetAlerts)
 
-	// Configure server
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      mux,
@@ -39,14 +42,12 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 	}
 
-	// Start server in a goroutine
 	go func() {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
 
-	// Setup graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
