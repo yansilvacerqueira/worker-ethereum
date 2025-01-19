@@ -1,111 +1,213 @@
 # Ethereum Transaction Monitor
 
-OBS: This is a study project, and there are still several improvements to be made. Feel free to contribute with PRs and new ideas.
+A robust Ethereum transaction monitoring system that tracks high-value transactions and specific token movements on the Ethereum blockchain. Built with Go, it features automatic failover between multiple RPC nodes, MongoDB storage, and a REST API for data access.
 
-### Overview
+## Features
 
-The Ethereum Transaction Monitor is a robust Go application designed to monitor Ethereum blockchain transactions in real-time. It tracks specific token and contract addresses, detects high-value transactions, and generates alerts based on configurable thresholds. The application consists of two main components: a transaction monitoring worker and a REST API server.
+- 🔍 Real-time monitoring of Ethereum transactions
+- 💰 High-value transaction detection and alerting
+- 🔄 Multiple RPC node support with automatic failover
+- 📊 REST API for querying transaction history and alerts
+- 🔐 MongoDB storage for transaction and alert data
+- ⚡ Rate limiting and retry mechanisms
+- 🛡️ Graceful shutdown handling
+- 🐳 Docker support with MongoDB and mongo-express
 
-### Features
+## Architecture
 
-- Real-time monitoring of Ethereum transactions
-- Tracking of specific ERC-20 tokens and smart contracts
-- High-value transaction detection and alerting
-- Transaction and alert data storage in MongoDB
-- REST API endpoints for accessing historical data
-- Rate limiting and retry mechanisms for robust operation
-- Graceful shutdown handling
+The project consists of two main components:
 
-### Prerequisites
+1. **Worker Service**: Monitors the Ethereum blockchain for transactions
+2. **API Service**: Provides HTTP endpoints to query stored data
 
-- Go 1.19 or higher
-- Docker and Docker Compose
-- MongoDB
-- Ethereum Node access (e.g., Infura WebSocket endpoint)
+### Key Components:
 
-### Configuration
+- `monitor`: Core transaction monitoring logic
+- `rpc`: RPC connection management with failover
+- `mongodb`: Database operations
+- `config`: Application configuration
+- `models`: Data structures
+- `api`: REST API handlers
 
-The application requires the following configuration:
+## Installation
 
-- Ethereum Node WebSocket URL
-- MongoDB connection details
-- Watched token and contract addresses
-- High-value transaction threshold
-- API server port (default: 8080)
-
-### Quick Start
-
-1. Clone the repository:
+### Standard Installation
 
 ```bash
-git clone https://github.com/yansilvacerqueira/worker-ethereum
-cd worker-ethereum
+# Clone the repository
+git clone https://github.com/yourusername/ethereum-monitor
+cd ethereum-monitor
+
+# Install dependencies
+go mod download
+
+# Build the project
+go build -o worker ./cmd/worker
+go build -o api ./cmd/api
 ```
 
-2. Start MongoDB using Docker Compose:
+### Docker Installation
+
+The project includes a `docker-compose.yml` file for easy deployment of the MongoDB database and mongo-express interface.
 
 ```bash
+# Start MongoDB and mongo-express
 docker-compose up -d
 ```
 
-3. Set your environment variables:
+This will start:
+
+- MongoDB on port 27017
+- Mongo Express (web interface) on port 8081
+
+#### MongoDB Configuration:
+
+- Username: root
+- Password: example
+- Database: ethereum_monitor
+
+#### Mongo Express Configuration:
+
+- URL: http://localhost:8081
+- Username: admin
+- Password: pass
+
+#### Docker Volumes:
+
+- `mongodb_data`: Persistent storage for MongoDB data
+
+## Configuration
+
+The system uses a configuration structure defined in `config.go`. You can customize the following parameters:
+
+```go
+type Config struct {
+  EthereumNodes      []string         // RPC node URLs
+  HighValueThreshold float64          // Threshold for high-value alerts
+  WatchedTokens      []common.Address // Token contracts to monitor
+  WatchedContracts   []common.Address // Other contracts to monitor
+  MongoURI           string           // MongoDB connection URI
+  MongoUser          string           // MongoDB username
+  MongoPassword      string           // MongoDB password
+  DatabaseName       string           // MongoDB database name
+}
+```
+
+### Default Configuration
+
+```go
+cfg := config.NewDefaultConfig()
+// Includes:
+// - Multiple public Ethereum RPC nodes
+// - 100 ETH high-value threshold
+// - Common tokens (DAI, USDC, WETH, cDAI)
+// - Local MongoDB connection
+```
+
+## Usage
+
+### Starting the Worker
 
 ```bash
-export ETHEREUM_NODE="wss://mainnet.infura.io/ws/v3/your-api-key"
-export MONGO_URI="mongodb://localhost:27017"
-export MONGO_USER="root"
-export MONGO_PASSWORD="example"
+./worker
 ```
 
-4. Run the application:
+The worker will:
+
+1. Connect to configured RPC nodes
+2. Monitor transactions for watched addresses
+3. Generate alerts for high-value transactions
+4. Store transaction data in MongoDB
+
+### Starting the API Server
 
 ```bash
-go run cmd/main.go
+./api
 ```
 
-### API Endpoints
+The API server provides the following endpoints:
 
-- `GET /api/transactions` - Retrieve monitored transactions
-- `GET /api/alerts` - Retrieve generated alerts
+- `GET /api/transactions`: Retrieve stored transactions
+- `GET /api/alerts`: Retrieve generated alerts
 
-### Docker Compose
+## API Examples
 
-The project includes a `docker-compose.yml` file for easy deployment of MongoDB:
-
-```yaml
-version: "3.8"
-services:
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-```
-
-### Script to populate the mongo
-
-Run this script to access the container and populate the db with some
-test data.
+### Get Transactions
 
 ```bash
-docker exec -it mongodb mongosh -u root -p example
-
-use ethereum_monitor
-
-db.transactions.insertOne({
-  hash: "0x123",
-  from: "0xabc",
-  to: "0xdef",
-  value: 1.5,
-  timestamp: new Date()
-})
-
-db.alerts.insertOne({
-  txHash: "0x123",
-  alertType: "high_value",
-  description: "Test alert",
-  timestamp: new Date()
-})
+curl http://localhost:8080/api/transactions
 ```
+
+### Get Alerts
+
+```bash
+curl http://localhost:8080/api/alerts
+```
+
+## RPC Failover System
+
+The system includes a sophisticated RPC management system that:
+
+1. Maintains connections to multiple Ethereum nodes
+2. Performs health checks every 30 seconds
+3. Automatically switches to healthy nodes when failures occur
+4. Implements round-robin load balancing
+
+Example configuration of RPC nodes:
+
+```go
+EthereumNodes: []string{
+  "wss://ethereum.publicnode.com",
+  "wss://mainnet.gateway.tenderly.co",
+  "wss://rpc.ankr.com/eth/ws",
+}
+```
+
+## MongoDB Schema
+
+### Transaction Collection
+
+```json
+{
+  "_id": ObjectId,
+  "hash": String,
+  "from": String,
+  "to": String,
+  "value": Number,
+  "token_name": String,
+  "token_value": Number,
+  "is_high_value": Boolean,
+  "is_suspicious": Boolean,
+  "alert_type": String,
+  "timestamp": Date
+}
+```
+
+### Alert Collection
+
+```json
+{
+  "_id": ObjectId,
+  "tx_hash": String,
+  "alert_type": String,
+  "description": String,
+  "timestamp": Date
+}
+```
+
+## Error Handling
+
+The system implements robust error handling:
+
+- Exponential backoff for RPC request retries
+- Rate limiting to prevent API abuse
+- Graceful shutdown handling
+- Comprehensive error logging
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
