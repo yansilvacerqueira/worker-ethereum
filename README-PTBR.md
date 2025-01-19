@@ -1,111 +1,213 @@
-# Transações Ethereum
+**Transações Ethereum**
 
-OBS: Este é um projeto de estudo e ainda há diversas melhorias a serem feitas. Fique à vontade para contribuir com PRs e novas ideias.
+Sistema de monitoramento de transações Ethereum que rastreia transações de alto valor e movimentos específicos de tokens na blockchain Ethereum. Construído com Go, ele apresenta failover automático entre múltiplos nós RPC, armazenamento em MongoDB e uma API REST para acesso aos dados.
 
-### Visão Geral
+## Funcionalidades
 
-A aplicação em Go projetada para acompanhar transações na blockchain Ethereum em tempo real. Ele monitora endereços de tokens e contratos específicos, identifica transações de alto valor e emite alertas com base em limites configuráveis. A aplicação é composta por dois principais componentes: um worker para monitorar as transações e um servidor de API REST.
+- 🔍 **Monitoramento em tempo real** das transações Ethereum
+- 💰 **Detecção e alerta** de transações de alto valor
+- 🔄 **Suporte a múltiplos nós RPC** com failover automático
+- 📊 **API REST** para consulta do histórico de transações e alertas
+- 🔐 **Armazenamento em MongoDB** para dados de transação e alerta
+- ⚡ **Limitação de taxa e mecanismos de repetição**
+- 🛡️ **Tratamento de desligamento suave**
+- 🐳 **Suporte a Docker** com MongoDB e mongo-express
 
-### Funcionalidades
+## Arquitetura
 
-- Monitoramento em tempo real de transações na rede Ethereum
-- Rastreamento de tokens ERC-20 e contratos inteligentes específicos
-- Detecção e alertas para transações de alto valor
-- Armazenamento de dados de transações e alertas no MongoDB
-- Endpoints REST API para consultar dados históricos
-- Mecanismos de limitação de taxa e tentativas automáticas para garantir estabilidade
-- Gerenciamento de encerramento de forma segura
+O projeto consiste em dois componentes principais:
 
-### Pré-requisitos
+1. **Serviço Worker**: Monitora a blockchain Ethereum para transações
+2. **Serviço API**: Fornece endpoints HTTP para consultar dados armazenados
 
-- Go 1.19 ou superior
-- Docker e Docker Compose
-- MongoDB
-- Acesso a um nó Ethereum (ex: WebSocket via Infura)
+### Componentes Principais:
 
-### Configuração
+- `monitor`: Lógica central de monitoramento de transações
+- `rpc`: Gerenciamento de conexão RPC com failover
+- `mongodb`: Operações no banco de dados
+- `config`: Configuração da aplicação
+- `models`: Estruturas de dados
+- `api`: Manipuladores da API REST
 
-A aplicação precisa das seguintes configurações:
+## Instalação
 
-- URL WebSocket do nó Ethereum
-- Informações de conexão com o MongoDB
-- Endereços de tokens e contratos a serem monitorados
-- Limite para alertar sobre transações de alto valor
-- Porta para o servidor API (padrão: 8080)
-
-### Início Rápido
-
-1. Clone o repositório:
+### Instalação Padrão
 
 ```bash
-git clone https://github.com/yansilvacerqueira/worker-ethereum
-cd worker-ethereum
+# Clone o repositório
+git clone https://github.com/yourusername/ethereum-monitor
+cd ethereum-monitor
+
+# Instale as dependências
+go mod download
+
+# Construa o projeto
+go build -o worker ./cmd/worker
+go build -o api ./cmd/api
 ```
 
-2. Inicie o MongoDB com Docker Compose:
+### Instalação via Docker
+
+O projeto inclui um arquivo `docker-compose.yml` para fácil implantação do banco de dados MongoDB e da interface mongo-express.
 
 ```bash
+# Inicie o MongoDB e mongo-express
 docker-compose up -d
 ```
 
-3. Configure suas variáveis de ambiente:
+Isso iniciará:
+
+- MongoDB na porta 27017
+- Mongo Express (interface web) na porta 8081
+
+#### Configuração do MongoDB:
+
+- Nome de usuário: root
+- Senha: example
+- Banco de dados: ethereum_monitor
+
+#### Configuração do Mongo Express:
+
+- URL: http://localhost:8081
+- Nome de usuário: admin
+- Senha: pass
+
+#### Volumes do Docker:
+
+- `mongodb_data`: Armazenamento persistente para dados do MongoDB
+
+## Configuração
+
+O sistema utiliza uma estrutura de configuração definida em `config.go`. Você pode personalizar os seguintes parâmetros:
+
+```go
+type Config struct {
+    EthereumNodes []string // URLs dos nós RPC
+    HighValueThreshold float64 // Limite para alertas de alto valor
+    WatchedTokens []common.Address // Contratos de tokens a serem monitorados
+    WatchedContracts []common.Address // Outros contratos a serem monitorados
+    MongoURI string // URI de conexão com o MongoDB
+    MongoUser string // Nome de usuário do MongoDB
+    MongoPassword string // Senha do MongoDB
+    DatabaseName string // Nome do banco de dados do MongoDB
+}
+```
+
+### Configuração Padrão
+
+```go
+cfg := config.NewDefaultConfig()
+// Inclui:
+// - Múltiplos nós RPC públicos da Ethereum
+// - Limite alto de 100 ETH
+// - Tokens comuns (DAI, USDC, WETH, cDAI)
+// - Conexão local com o MongoDB
+```
+
+## Uso
+
+### Iniciando o Worker
 
 ```bash
-export ETHEREUM_NODE="wss://mainnet.infura.io/ws/v3/sua-api-key"
-export MONGO_URI="mongodb://localhost:27017"
-export MONGO_USER="root"
-export MONGO_PASSWORD="example"
+./worker
 ```
 
-4. Execute a aplicação:
+O worker irá:
+
+1. Conectar-se aos nós RPC configurados.
+2. Monitorar transações para endereços observados.
+3. Gerar alertas para transações de alto valor.
+4. Armazenar dados das transações no MongoDB.
+
+### Iniciando o Servidor API
 
 ```bash
-go run cmd/main.go
+./api
 ```
 
-### Endpoints da API
+O servidor API fornece os seguintes endpoints:
 
-- `GET /api/transactions` - Retorna as transações monitoradas
-- `GET /api/alerts` - Retorna os alertas gerados
+- `GET /api/transactions`: Recuperar transações armazenadas.
+- `GET /api/alerts`: Recuperar alertas gerados.
 
-### Docker Compose
+## Exemplos da API
 
-O projeto inclui um arquivo `docker-compose.yml` para facilitar a configuração do MongoDB:
-
-```yaml
-version: "3.8"
-services:
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-```
-
-### Script para popular o mongo
-
-Execute este script para acessar o container e popular o db com alguns
-dados de teste.
+### Obter Transações
 
 ```bash
-docker exec -it mongodb mongosh -u root -p example
-
-use ethereum_monitor
-
-db.transactions.insertOne({
-  hash: "0x123",
-  from: "0xabc",
-  to: "0xdef",
-  value: 1.5,
-  timestamp: new Date()
-})
-
-db.alerts.insertOne({
-  txHash: "0x123",
-  alertType: "high_value",
-  description: "Test alert",
-  timestamp: new Date()
-})
+curl http://localhost:8080/api/transactions
 ```
+
+### Obter Alertas
+
+```bash
+curl http://localhost:8080/api/alerts
+```
+
+## Sistema de Failover RPC
+
+O sistema inclui um "sofisticado" sistema de gerenciamento RPC que:
+
+1. Mantém conexões com múltiplos nós Ethereum.
+2. Realiza verificações de saúde a cada 30 segundos.
+3. Alterna automaticamente para nós saudáveis quando falhas ocorrem.
+4. Implementa balanceamento de carga round-robin.
+
+Exemplo de configuração dos nós RPC:
+
+```go
+EthereumNodes: []string{
+    "wss://ethereum.publicnode.com",
+    "wss://mainnet.gateway.tenderly.co",
+    "wss://rpc.ankr.com/eth/ws",
+}
+```
+
+## Esquema do MongoDB
+
+### Coleção de Transações
+
+```json
+{
+    "_id": ObjectId,
+    "hash": String,
+    "from": String,
+    "to": String,
+    "value": Number,
+    "token_name": String,
+    "token_value": Number,
+    "is_high_value": Boolean,
+    "is_suspicious": Boolean,
+    "alert_type": String,
+    "timestamp": Date
+}
+```
+
+### Coleção de Alertas
+
+```json
+{
+    "_id": ObjectId,
+    "tx_hash": String,
+    "alert_type": String,
+    "description": String,
+    "timestamp": Date
+}
+```
+
+## Tratamento de Erros
+
+Tratamento de erros:
+
+- Repetições com backoff exponencial para requisições RPC.
+- Limitação da taxa para prevenir abusos da API.
+- Tratamento suave no desligamento.
+- Registro abrangente dos erros.
+
+## Deseja Contribuir ?
+
+1. Faça um fork do repositório.
+2. Crie sua branch de recurso (`git checkout -b feature/amazing-feature`).
+3. Comite suas alterações (`git commit -m 'Adicione uma funcionalidade incrível'`).
+4. Envie para a branch (`git push origin feature/amazing-feature`).
+5. Abra um Pull Request.
